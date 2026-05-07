@@ -46,30 +46,23 @@ export default async function handler(req, res) {
 
   const { focus = 'all', type = 'all', region = 'all' } = req.body || {};
 
-  const prompt = `You are an expert opportunity advisor for STEM students from Africa. List 10 REAL, well-known opportunities that Samuel should apply to. Use your knowledge of actual programs — include real application URLs.
+  const prompt = `List 8 REAL opportunities for this student. Use your knowledge of actual programs — real URLs only.
 
-STUDENT PROFILE:
-- Samuel Adegboyega, Nigerian, University of Lagos
-- B.Sc. Industrial Mathematics, Final Year (graduating June 2026), GPA 4.90/5.0 (First Class)
-- Skills: Python, R, SQL, Pandas, NumPy, Matplotlib, Seaborn, Plotly, Power BI, Excel, TensorFlow, Git
-- Certification: NITDA Data Science Professional (Coursera, April 2026)
-- Research: Led EIRS Ebola mathematical modelling — ODE formulation, data collection at LUTH, stability analysis
-- Leadership: VP of PESSA, founded PIC 2026 innovation competition
-- Open to: paid or unpaid, remote or in-person, willing to relocate internationally
+STUDENT: Samuel Adegboyega | Nigerian | University of Lagos | B.Sc. Industrial Mathematics (Final Year 2026) | GPA 4.90/5.0 | Python, R, SQL, Pandas, TensorFlow, Power BI | NITDA Data Science Cert | Led EIRS Ebola ODE modelling at LUTH | VP PESSA | Open to any region, paid or unpaid.
 
-FOCUS AREAS: ${FOCUS_KEYWORDS[focus] || FOCUS_KEYWORDS.all}
-OPPORTUNITY TYPES: ${TYPE_KEYWORDS[type] || TYPE_KEYWORDS.all}
-REGIONS: ${REGION_KEYWORDS[region] || REGION_KEYWORDS.all}
+FOCUS: ${FOCUS_KEYWORDS[focus] || FOCUS_KEYWORDS.all}
+TYPE: ${TYPE_KEYWORDS[type] || TYPE_KEYWORDS.all}
+REGION: ${REGION_KEYWORDS[region] || REGION_KEYWORDS.all}
 
-Include a diverse mix — think: DAAD, Tony Elumelu Foundation, AIMS, World Bank YPP, Google, UN, Mastercard Foundation, African Development Bank, NASA, university research programs, NGOs, and lesser-known but legitimate programs specifically open to Nigerian/African students.
+Think: DAAD, Tony Elumelu Foundation, AIMS, World Bank YPP, Google, UN, Mastercard Foundation, African Development Bank, NASA, university research programs open to Nigerians.
 
-Return ONLY this JSON — no markdown, no explanation, nothing outside the JSON:
-{"opportunities":[{"title":"exact program name","org":"full organisation name","type":"internship|fellowship|research|program","description":"2 sentences about the program and what Samuel would do","deadline":"typical deadline month/year or Rolling","location":"City Country or Remote","paid":true,"stipend":"amount or Unpaid or Varies","eligibility":"one sentence","url":"https://real-url.com","match_reason":"why this specifically fits Samuel","source":"org website or known platform"}]}`;
+Return ONLY valid JSON, nothing else:
+{"opportunities":[{"title":"","org":"","type":"internship|fellowship|research|program","description":"1-2 sentences","deadline":"month/year or Rolling","location":"City Country or Remote","paid":true,"stipend":"amount or Unpaid","eligibility":"one sentence","url":"https://...","match_reason":"why this fits Samuel","source":"platform"}]}`;
 
   try {
     const data = await callAnthropic({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2500,
       messages: [{ role: 'user', content: prompt }],
     });
 

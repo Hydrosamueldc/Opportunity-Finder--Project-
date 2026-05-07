@@ -48,8 +48,8 @@ Write 3–4 paragraphs in first person as Samuel. Professional but warm. Referen
 
   try {
     const data = await callAnthropic({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
       messages: [{ role: 'user', content: prompt }],
     });
 
