@@ -1,6 +1,20 @@
 export const config = { runtime: 'edge' };
 
-import Anthropic from '@anthropic-ai/sdk';
+async function anthropic(body) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 300)}`);
+  return JSON.parse(text);
+}
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -23,8 +37,6 @@ export default async function handler(req) {
     });
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const prompt = `Write a tailored professional cover letter.
 
 APPLICANT:
@@ -34,8 +46,8 @@ Degree: B.Sc. Industrial Mathematics, 400 Level (Final Year, graduating June 202
 GPA: 4.90/5.0 (First Class)
 Skills: Python, R, SQL, JavaScript, Pandas, NumPy, Matplotlib, Seaborn, Plotly, Power BI, Excel, TensorFlow, Git
 Experience:
-- Vice President, PESSA (Physical and Earth Sciences Students Association), University of Lagos, 2025-Present. Founded and leads PIC 2026 innovation competition from scratch.
-- EIRS Mathematical Model of Ebola Virus Disease — Team Lead. Primary data collection at LUTH, ODE formulation, compartmental flow diagram, non-dimensionalisation, stability analysis.
+- Vice President, PESSA (Physical and Earth Sciences Students Association), 2025-Present. Founded PIC 2026 innovation competition.
+- EIRS Mathematical Model of Ebola Virus Disease — Team Lead. ODE formulation, primary data from LUTH, non-dimensionalisation, stability analysis.
 - Private Mathematics Tutor, 2024-Present.
 Certification: NITDA Data Science Professional Certificate (Coursera, April 2026).
 
@@ -49,13 +61,13 @@ Location: ${opportunity.location || 'TBD'}
 Write 3–4 paragraphs in first person as Samuel. Professional but warm. Reference specific matching skills, VP/PESSA leadership, PIC 2026, and EIRS Ebola modelling where relevant. End with a clear call to action. No placeholder brackets. Do not mention AI.`;
 
   try {
-    const message = await client.messages.create({
+    const data = await anthropic({
       model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const text = (message.content || [])
+    const text = (data.content || [])
       .filter(b => b.type === 'text')
       .map(b => b.text)
       .join('');

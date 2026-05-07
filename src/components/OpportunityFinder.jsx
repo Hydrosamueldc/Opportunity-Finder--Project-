@@ -182,7 +182,11 @@ export default function OpportunityFinder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ focus, type, region }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); } catch (_) {
+        throw new Error(`Server error: ${raw.slice(0, 200)}`);
+      }
 
       if (!res.ok) throw new Error(data.error || 'Search failed');
       if (!data.opportunities?.length) throw new Error('No opportunities found. Try different filters.');

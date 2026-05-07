@@ -1,13 +1,11 @@
 export const config = { runtime: 'edge' };
 
-import Anthropic from '@anthropic-ai/sdk';
-
 const FOCUS_KEYWORDS = {
-  all: 'data science OR "artificial intelligence" OR "machine learning" OR mathematics OR statistics OR "STEM research" OR "mathematical modelling"',
-  'data science': '"data science" OR "data analysis" OR "big data" OR analytics OR "statistical modelling"',
+  all: 'data science OR "artificial intelligence" OR "machine learning" OR mathematics OR statistics OR "mathematical modelling"',
+  'data science': '"data science" OR "data analysis" OR analytics OR "statistical modelling"',
   'AI machine learning': '"artificial intelligence" OR "machine learning" OR "deep learning" OR "neural networks" OR NLP',
   'mathematics statistics research': 'mathematics OR statistics OR "mathematical modelling" OR "applied mathematics" OR "mathematical biology"',
-  'epidemiology modelling': '"epidemiological modelling" OR "mathematical biology" OR "disease modelling" OR "compartmental model" OR "infectious disease"',
+  'epidemiology modelling': '"epidemiological modelling" OR "mathematical biology" OR "disease modelling" OR "infectious disease"',
   'software engineering': '"software engineering" OR "software development" OR "web development" OR "full stack"',
   STEM: 'STEM OR science OR technology OR engineering OR mathematics OR "research program"',
 };
@@ -28,6 +26,23 @@ const REGION_KEYWORDS = {
   remote: 'remote OR virtual OR online OR "work from home" OR "fully remote"',
 };
 
+async function anthropic(body) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'web-search-2025-03-05',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 300)}`);
+  return JSON.parse(text);
+}
+
 export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -44,13 +59,11 @@ export default async function handler(req) {
     region = body.region || 'all';
   } catch (_) {}
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const systemPrompt = `You are an expert global opportunity researcher with access to web search.
-Search WIDELY — LinkedIn, Glassdoor, Indeed, jobs.ac.uk, university career pages, NGO sites, opportunitydesk.org, afterschoolafrica.com, scholars4dev.com, idealist.org, company career portals.
+Search WIDELY — LinkedIn, Glassdoor, Indeed, jobs.ac.uk, university career pages, NGO sites, opportunitydesk.org, afterschoolafrica.com, scholars4dev.com, idealist.org.
 Your FINAL response MUST be ONLY raw valid JSON starting with { and ending with }. No markdown, no preamble.`;
 
-  const userPrompt = `Find 10 REAL, CURRENTLY OPEN opportunities for this student. Search LinkedIn, job boards, university sites, and opportunity databases.
+  const userPrompt = `Find 10 REAL, CURRENTLY OPEN opportunities for this student.
 
 STUDENT: Samuel Adegboyega | Nigerian | University of Lagos | B.Sc. Industrial Mathematics (Final Year, June 2026) | GPA 4.90/5.0 | Python, R, SQL, Pandas, TensorFlow, Power BI | NITDA Data Science Cert (2026) | Led EIRS Ebola mathematical modelling (ODE, LUTH data) | VP PESSA, founded PIC 2026 competition | Open to paid/unpaid, remote/in-person, any region.
 
@@ -63,7 +76,7 @@ Return ONLY this JSON:
 
   try {
     let messages = [{ role: 'user', content: userPrompt }];
-    let data = await client.messages.create({
+    let data = await anthropic({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
       system: systemPrompt,
@@ -88,7 +101,7 @@ Return ONLY this JSON:
         { role: 'user', content: toolResults },
       ];
 
-      data = await client.messages.create({
+      data = await anthropic({
         model: 'claude-sonnet-4-6',
         max_tokens: 4000,
         system: systemPrompt,
@@ -104,7 +117,6 @@ Return ONLY this JSON:
 
     let parsed = null;
     try { parsed = JSON.parse(text.trim()); } catch (_) {}
-
     if (!parsed) {
       const s = text.indexOf('{'), e = text.lastIndexOf('}');
       if (s !== -1 && e !== -1) {
