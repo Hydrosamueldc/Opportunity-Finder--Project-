@@ -1,6 +1,4 @@
-export const config = { runtime: 'edge' };
-
-async function anthropic(body) {
+async function callAnthropic(body) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -10,31 +8,19 @@ async function anthropic(body) {
     },
     body: JSON.stringify(body),
   });
-
   const text = await res.text();
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 300)}`);
   return JSON.parse(text);
 }
 
-export default async function handler(req) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let opportunity = null;
-  try {
-    const body = await req.json();
-    opportunity = body.opportunity;
-  } catch (_) {}
-
+  const { opportunity } = req.body || {};
   if (!opportunity) {
-    return new Response(JSON.stringify({ error: 'opportunity is required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(400).json({ error: 'opportunity is required' });
   }
 
   const prompt = `Write a tailored professional cover letter.
@@ -47,7 +33,7 @@ GPA: 4.90/5.0 (First Class)
 Skills: Python, R, SQL, JavaScript, Pandas, NumPy, Matplotlib, Seaborn, Plotly, Power BI, Excel, TensorFlow, Git
 Experience:
 - Vice President, PESSA (Physical and Earth Sciences Students Association), 2025-Present. Founded PIC 2026 innovation competition.
-- EIRS Mathematical Model of Ebola Virus Disease — Team Lead. ODE formulation, primary data from LUTH, non-dimensionalisation, stability analysis.
+- EIRS Mathematical Model of Ebola Virus Disease — Team Lead. ODE formulation, primary data collection at LUTH, non-dimensionalisation, stability analysis.
 - Private Mathematics Tutor, 2024-Present.
 Certification: NITDA Data Science Professional Certificate (Coursera, April 2026).
 
@@ -61,7 +47,7 @@ Location: ${opportunity.location || 'TBD'}
 Write 3–4 paragraphs in first person as Samuel. Professional but warm. Reference specific matching skills, VP/PESSA leadership, PIC 2026, and EIRS Ebola modelling where relevant. End with a clear call to action. No placeholder brackets. Do not mention AI.`;
 
   try {
-    const data = await anthropic({
+    const data = await callAnthropic({
       model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
@@ -72,13 +58,8 @@ Write 3–4 paragraphs in first person as Samuel. Professional but warm. Referen
       .map(b => b.text)
       .join('');
 
-    return new Response(JSON.stringify({ coverLetter: text }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.json({ coverLetter: text });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(500).json({ error: err.message });
   }
 }
