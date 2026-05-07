@@ -9,60 +9,81 @@ async function callAnthropic(body) {
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 300)}`);
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${text.slice(0, 200)}`);
   return JSON.parse(text);
 }
 
 const FOCUS_KEYWORDS = {
-  all: 'data science, AI/ML, mathematics, statistics, mathematical modelling, STEM research',
-  'data science': 'data science, data analysis, big data, analytics, statistical modelling, BI',
-  'AI machine learning': 'artificial intelligence, machine learning, deep learning, neural networks, NLP, computer vision',
-  'mathematics statistics research': 'mathematics, statistics, mathematical modelling, applied mathematics, mathematical biology',
-  'epidemiology modelling': 'epidemiological modelling, mathematical biology, disease modelling, compartmental models, infectious disease',
-  'software engineering': 'software engineering, software development, web development, full stack, backend',
-  STEM: 'STEM, science, technology, engineering, mathematics, interdisciplinary research',
+  all: 'data science, AI/ML, mathematics, statistics, mathematical modelling, STEM',
+  'data science': 'data science, data analysis, analytics, statistical modelling',
+  'AI machine learning': 'artificial intelligence, machine learning, deep learning, NLP',
+  'mathematics statistics research': 'mathematics, statistics, mathematical modelling, applied mathematics',
+  'epidemiology modelling': 'epidemiological modelling, mathematical biology, infectious disease modelling',
+  'software engineering': 'software engineering, software development, web development',
+  STEM: 'STEM, science, technology, engineering, mathematics',
 };
 
 const TYPE_KEYWORDS = {
-  all: 'internships, fellowships, research programs, scholarships, research experience',
-  internship: 'internships, summer internships, research internships',
-  fellowship: 'fellowships, scholarships, funded programs, research fellowships',
+  all: 'internships, fellowships, research programs, scholarships',
+  internship: 'internships, summer internships',
+  fellowship: 'fellowships, scholarships, funded programs',
   'research program': 'research programs, REU, summer research, undergraduate research',
 };
 
 const REGION_KEYWORDS = {
-  all: 'international, global, USA, UK, Europe, Africa, remote — open to Nigerian students',
-  international: 'international, global, open to all nationalities',
-  USA: 'United States, USA, American universities and organisations',
-  'UK Europe': 'United Kingdom, Europe, EU, Germany, France, Netherlands',
-  'Africa Nigeria': 'Africa, Nigeria, West Africa, pan-African programs',
-  remote: 'remote, virtual, online, fully remote, hybrid',
+  all: 'global — open to Nigerian/African students',
+  international: 'international, open to all nationalities',
+  USA: 'United States, American universities',
+  'UK Europe': 'United Kingdom, Europe, Germany, France',
+  'Africa Nigeria': 'Africa, Nigeria, pan-African programs',
+  remote: 'remote, virtual, online',
 };
 
-// Three parallel searches covering different source categories
 const SEARCH_ANGLES = [
   {
     label: 'Global Tech & International Orgs',
-    sources: 'Google, Microsoft, Meta, IBM, Amazon, Salesforce, UN, UNDP, UNESCO, UNICEF, World Bank, IMF, WHO, NASA, ESA, CERN, Max Planck Institute, Wellcome Trust, Gates Foundation, Fulbright, Commonwealth Scholarship, British Council, Chevening',
+    sources: 'Google, Microsoft, Meta, IBM, Amazon, UN, UNDP, UNESCO, World Bank, IMF, WHO, NASA, ESA, Gates Foundation, Fulbright, Commonwealth Scholarship, Chevening, DAAD, British Council',
   },
   {
     label: 'Africa-Focused Programs',
-    sources: 'Tony Elumelu Foundation, AIMS (African Institute of Mathematical Sciences), Mastercard Foundation, African Development Bank, African Union, Mo Ibrahim Foundation, NITDA, MTN Foundation, Access Bank, Stanbic IBTC, Dangote Foundation, TETFund, YALI, ECOWAS, AfriLabs, CcHUB, Co-Creation Hub',
+    sources: 'Tony Elumelu Foundation, AIMS, Mastercard Foundation, African Development Bank, African Union, Mo Ibrahim Foundation, YALI, NITDA, MTN Foundation, CcHUB, AfriLabs, Access Bank, Stanbic IBTC',
   },
   {
-    label: 'Universities, Research & Job Boards',
-    sources: 'US university REU programs, UK university research internships, European DAAD scholarships, OIST Japan, ETH Zurich, EPFL, LinkedIn Jobs, Glassdoor, Indeed, AfterSchoolAfrica, OpportunityDesk, scholars4dev, idealist.org, jobs.ac.uk, ResearchGate, IEEE, SIAM, Royal Statistical Society, Handshake',
+    label: 'Universities & Job Boards',
+    sources: 'US REU programs, UK university research internships, ETH Zurich, EPFL, OIST Japan, LinkedIn Jobs, AfterSchoolAfrica, OpportunityDesk, scholars4dev, idealist.org, jobs.ac.uk, Glassdoor, Indeed, Handshake, IEEE, SIAM',
   },
 ];
 
 function parseOpportunities(data) {
-  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  const text = (data.content || [])
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+
+  // Try direct parse first
   try {
-    const s = text.indexOf('{'), e = text.lastIndexOf('}');
-    if (s === -1 || e === -1) return [];
-    const parsed = JSON.parse(text.slice(s, e + 1));
-    return Array.isArray(parsed.opportunities) ? parsed.opportunities : [];
-  } catch (_) { return []; }
+    const p = JSON.parse(text.trim());
+    if (Array.isArray(p)) return p;
+    if (Array.isArray(p.opportunities)) return p.opportunities;
+  } catch (_) {}
+
+  // Try extracting JSON object
+  const s = text.indexOf('{'), e = text.lastIndexOf('}');
+  if (s !== -1 && e !== -1) {
+    try {
+      const p = JSON.parse(text.slice(s, e + 1));
+      if (Array.isArray(p.opportunities)) return p.opportunities;
+      if (Array.isArray(p)) return p;
+    } catch (_) {}
+  }
+
+  // Try extracting JSON array
+  const sa = text.indexOf('['), ea = text.lastIndexOf(']');
+  if (sa !== -1 && ea !== -1) {
+    try { return JSON.parse(text.slice(sa, ea + 1)); } catch (_) {}
+  }
+
+  return [];
 }
 
 export default async function handler(req, res) {
@@ -71,48 +92,56 @@ export default async function handler(req, res) {
   }
 
   const { focus = 'all', type = 'all', region = 'all' } = req.body || {};
-  const seed = Date.now(); // ensures different results each run
+  const seed = Date.now();
 
-  const profile = `STUDENT: Samuel Adegboyega | Nigerian | University of Lagos | B.Sc. Industrial Mathematics (Final Year, June 2026) | GPA 4.90/5.0 First Class | Skills: Python, R, SQL, Pandas, NumPy, TensorFlow, Power BI, Git | NITDA Data Science Cert (2026) | Led EIRS Ebola ODE mathematical modelling at LUTH | VP PESSA, founded PIC 2026 | Open to any region, paid or unpaid.
-FOCUS: ${FOCUS_KEYWORDS[focus] || FOCUS_KEYWORDS.all}
-TYPE: ${TYPE_KEYWORDS[type] || TYPE_KEYWORDS.all}
-REGION: ${REGION_KEYWORDS[region] || REGION_KEYWORDS.all}
-RUN: ${seed}`;
+  const profile = `Samuel Adegboyega | Nigerian | Univ. of Lagos | B.Sc. Industrial Mathematics Final Year 2026 | GPA 4.90/5.0 | Python R SQL Pandas TensorFlow Power BI | NITDA Data Science Cert | Led EIRS Ebola ODE modelling | VP PESSA | Open to any region paid/unpaid. Focus: ${FOCUS_KEYWORDS[focus] || FOCUS_KEYWORDS.all}. Type: ${TYPE_KEYWORDS[type] || TYPE_KEYWORDS.all}. Region: ${REGION_KEYWORDS[region] || REGION_KEYWORDS.all}. Seed:${seed}`;
 
-  // Fire all 3 searches in parallel — each targets a different source category
+  // 3 parallel searches — each targets a different source category
   const searches = SEARCH_ANGLES.map(({ label, sources }) =>
     callAnthropic({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-6',
       max_tokens: 900,
       messages: [{
         role: 'user',
-        content: `${profile}
+        content: `List 3 REAL opportunities for this student from these sources: ${sources}
 
-Search specifically from these sources: ${sources}
+${profile}
 
-Find 4 REAL opportunities with actual URLs. Return ONLY valid JSON:
-{"opportunities":[{"title":"","org":"","type":"internship|fellowship|research|program","description":"1-2 sentences","deadline":"month/year or Rolling","location":"City Country or Remote","paid":true,"stipend":"amount or Unpaid","eligibility":"one sentence","url":"https://...","match_reason":"why fits Samuel","source":"${label}"}]}`,
+Return ONLY valid JSON, no markdown:
+{"opportunities":[{"title":"","org":"","type":"internship|fellowship|research|program","description":"1 sentence","deadline":"month/year or Rolling","location":"City Country or Remote","paid":true,"stipend":"amount or Unpaid","eligibility":"one sentence","url":"https://...","match_reason":"one sentence","source":"${label}"}]}`,
       }],
     })
       .then(parseOpportunities)
-      .catch(() => [])
+      .catch(err => ({ __error: err.message }))
   );
 
   try {
     const results = await Promise.all(searches);
-    const all = results.flat();
 
-    // Deduplicate by URL
+    // Surface errors if all calls failed
+    const errors = results.filter(r => r && r.__error);
+    if (errors.length === results.length) {
+      return res.status(500).json({ error: errors[0].__error });
+    }
+
+    const all = results.filter(r => Array.isArray(r)).flat();
+
+    // Deduplicate by title (case-insensitive)
     const seen = new Set();
     const unique = all.filter(opp => {
-      const key = (opp.url || opp.title || '').toLowerCase();
+      if (!opp || typeof opp !== 'object') return false;
+      const key = (opp.title || '').toLowerCase().trim();
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
     if (!unique.length) {
-      return res.status(500).json({ error: 'No results found. Please try again.' });
+      // Return partial errors for debugging
+      const errMsgs = errors.map(e => e.__error).join(' | ');
+      return res.status(500).json({
+        error: `No results parsed. ${errMsgs || 'Check API key in Vercel environment variables.'}`,
+      });
     }
 
     return res.json({ opportunities: unique });
