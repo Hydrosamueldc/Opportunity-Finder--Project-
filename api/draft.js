@@ -1,17 +1,29 @@
+export const config = { runtime: 'edge' };
+
 import Anthropic from '@anthropic-ai/sdk';
 
-const client = new Anthropic();
-
-export default async function handler(req, res) {
+export default async function handler(req) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  const { opportunity } = req.body || {};
+  let opportunity = null;
+  try {
+    const body = await req.json();
+    opportunity = body.opportunity;
+  } catch (_) {}
 
   if (!opportunity) {
-    return res.status(400).json({ error: 'opportunity is required' });
+    return new Response(JSON.stringify({ error: 'opportunity is required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const prompt = `Write a tailored professional cover letter.
 
@@ -25,7 +37,7 @@ Experience:
 - Vice President, PESSA (Physical and Earth Sciences Students Association), University of Lagos, 2025-Present. Founded and leads PIC 2026 innovation competition from scratch.
 - EIRS Mathematical Model of Ebola Virus Disease — Team Lead. Primary data collection at LUTH, ODE formulation, compartmental flow diagram, non-dimensionalisation, stability analysis.
 - Private Mathematics Tutor, 2024-Present.
-Certification: NITDA Data Science Professional Certificate (Coursera, April 2026) — covers Python, SQL, Pandas, ML regression, data visualisation, interactive dashboards.
+Certification: NITDA Data Science Professional Certificate (Coursera, April 2026).
 
 OPPORTUNITY:
 Title: ${opportunity.title}
@@ -34,7 +46,7 @@ Type: ${opportunity.type}
 Description: ${opportunity.description}
 Location: ${opportunity.location || 'TBD'}
 
-Write 3–4 paragraphs in first person as Samuel. Be professional but warm. Reference specific skills and experience that match this particular role. Mention his VP/PESSA leadership and the PIC 2026 innovation competition naturally. Reference his EIRS Ebola modelling research where relevant. End with a clear call to action. Do not use placeholder brackets — write the complete, final letter. Do not mention AI.`;
+Write 3–4 paragraphs in first person as Samuel. Professional but warm. Reference specific matching skills, VP/PESSA leadership, PIC 2026, and EIRS Ebola modelling where relevant. End with a clear call to action. No placeholder brackets. Do not mention AI.`;
 
   try {
     const message = await client.messages.create({
@@ -48,8 +60,13 @@ Write 3–4 paragraphs in first person as Samuel. Be professional but warm. Refe
       .map(b => b.text)
       .join('');
 
-    return res.json({ coverLetter: text });
+    return new Response(JSON.stringify({ coverLetter: text }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
